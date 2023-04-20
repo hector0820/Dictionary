@@ -16,4 +16,5 @@ The word information is
 
 ---
 
-- [x] Now I worked in `FindingMeaning`, that retrieve the word information and `DataBase` that save the data into the sqlite database. 
+- [x] `FindingMeaning` retrieves the word information 
+- [x] `DataBase` saves the data into the sqlite database. 
