@@ -11,10 +11,13 @@ The word information is
 - Word
 - Meaning
 - Spanish translation
-- Four sentences as example
-- The translation to spanish of that four translations
+- Sentences as example
+- The translation to spanish of that sentences
 
 ---
 
 - [x] `FindingMeaning` retrieves the word information 
 - [x] `DataBase` saves the data into the sqlite database. 
+- [ ] Graphical interface
+    - [ ] A complete list of words
+    - [ ] A section to edit any word or meaning

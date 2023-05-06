@@ -1,3 +1,6 @@
+from DataBase import DataBase
 from FindMeaning import FindMeaning
-from DataBase import SQLite3
 
+if __name__ == '__main__':
+    dark = DataBase('today', FindMeaning)
+    print(dark.data)
