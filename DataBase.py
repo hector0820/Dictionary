@@ -1,126 +1,89 @@
+import os
+import sys
+import re
+import sqlite3
+
 class DataBase():
-    def __init__(self, word, obj):
-        self.word = word
-        self.data = {"word": self.word,
-                     "translation": None,
-                     "meaning": None,
-                     "sentences": None}
-        self.cursor = 'hola'
+    def __init__(self):
+        self.word = None
+        self.data = {"word": self.word, "translation": None, "meaning": None }
+        self.cursor = None
         self.connection = None
-        self.obj = obj(word)
+        self.id = None
 
-        self.Connection()
-        self.Create()
-        self.Exist()
+        self.DataBase()
 
-    def Connection(self):
-        import os
-        import sqlite3
-        if not os.path.exists('words.sqlite3'):
+    def DataBase(self):
+        if os.path.exists('words.sqlite3'):
             self.connection = sqlite3.connect('words.sqlite3')
             self.cursor = self.connection.cursor()
-            self.Create()
         else:
             self.connection = sqlite3.connect('words.sqlite3')
             self.cursor = self.connection.cursor()
+            self.cursor.executescript('''
+                CREATE TABLE IF NOT EXISTS Words (
+                    id  INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+                    word    TEXT UNIQUE
+                );
+                CREATE TABLE IF NOT EXISTS Translation (
+                    id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+                    word_id     INTEGER,
+                    traduccion  TEXT  UNIQUE
+                );
+                CREATE TABLE IF NOT EXISTS Meanings (
+                    id       INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+                    word_id  INTEGER,
+                    meaning  TEXT
+                );
+                ''')
+            self.connection.commit()
 
-    def Create(self):
-        self.cursor.executescript('''
-            CREATE TABLE IF NOT EXISTS Words (
-                id  INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
-                word    TEXT UNIQUE
-            );
-            CREATE TABLE IF NOT EXISTS Translation (
-                id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
-                word_id     INTEGER,
-                traduccion  TEXT  UNIQUE
-            );
-            CREATE TABLE IF NOT EXISTS Meanings (
-                id       INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
-                word_id  INTEGER,
-                meaning  TEXT
-            );
-            CREATE TABLE IF NOT EXISTS Examples (
-                id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
-                word_id     INTEGER,
-                example     TEXT  UNIQUE
-            );
-            CREATE TABLE IF NOT EXISTS Ejemplos (
-                id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
-                word_id     INTEGER,
-                example_id  INTEGER,
-                traduccion  TEXT  UNIQUE
-            );
-            ''')
+    def Word_in_DataBase(self):
+        self.cursor.execute('SELECT id FROM Words WHERE word = ? ', (self.word, ))
+        id = self.cursor.fetchone()
+        if id != None: 
+            self.id = id[0]
+            self.data['word'] = self.word
+        
+    def Delete(self):
+        words = self.WordsList()
+        word = re.sub('\n', '', os.popen('echo "{}" | dmenu'.format("\n".join(words))).read()).lower()
+        self.cursor.execute('DELETE FROM Words WHERE word = ?', (word, ))
         self.connection.commit()
 
-    def Word_id(self):
-        self.cursor.execute('SELECT id FROM Words WHERE word = ? ', (self.word, ))
-        return self.cursor.fetchone()[0]
-    
-    def Exist(self):
-        if bool(self.cursor.execute('SELECT * FROM Words WHERE word = ?', ( self.word, )).fetchall()):
-            self.Retrieve()
-            self.cursor.close()
-        else:
-            self.obj.Find()
-            self.data = self.obj.data
-            self.Adding()
+    def Adding(self, data):
+        self.cursor.execute('INSERT OR IGNORE INTO Words (word) VALUES ( ? )', ( self.word, ))
+        self.Word_in_DataBase()
+
+        for i in data['translation']:
+            self.cursor.execute('INSERT OR IGNORE INTO Translation (word_id, traduccion) VALUES (?, ? )', (self.id, i))
+
+        for i in data['meaning']:
+            self.cursor.execute('INSERT OR IGNORE INTO Meanings (word_id, meaning) VALUES (?, ?)', (self.id, i))
+
+        self.connection.commit()
+
+    def WordsList(self):
+        self.cursor.execute('SELECT word FROM Words')
+        return [ n[0] for n in self.cursor.fetchall() ]
+
+    def Update(self):
+        words = self.WordsList()
+        word = re.sub('\n', '', os.popen('echo "{}" | dmenu'.format("\n".join(words))).read()).lower()
+        new_word = re.sub('\n', '', os.popen('echo '' | dmenu -p "{}"'.format(word)).read()).lower()
+
+        self.cursor.execute('UPDATE Words SET word = ( ? ) WHERE word = ( ? )', (new_word, word))
+
+        self.word = new_word
+        self.data['word'] = new_word
+        self.connection.commit()
+        self.Word_in_DataBase()
 
     def Retrieve(self):
-        word_id = self.Word_id()
-        self.cursor.execute('SELECT traduccion FROM Translation WHERE word_id = ? ', (word_id, ))
-        translation = [ n[0] for n in self.cursor.fetchall() ]
+        self.cursor.execute('SELECT traduccion FROM Translation WHERE word_id = ? ', (self.id, ))
+        self.data['translation'] = [ n[0] for n in self.cursor.fetchall() ]
         
-        self.cursor.execute('SELECT meaning FROM Meanings WHERE word_id = ? ', (word_id, ))
-        meaning = [ str(n[0]) for n in self.cursor.fetchall() ]
+        self.cursor.execute('SELECT meaning FROM Meanings WHERE word_id = ? ', (self.id, ))
+        self.data['meaning'] = [ str(n[0]) for n in self.cursor.fetchall() ]
 
-        self.cursor.execute('SELECT example FROM Examples WHERE word_id = ? ', (word_id, ))
-        examples = [ str(n[0]) for n in self.cursor.fetchall() ]
-
-        self.data['translation'] = translation
-        self.data['meaning'] = meaning
-
-        sentences = dict()
-        
-        for x in examples:
-            self.cursor.execute('SELECT id FROM Examples WHERE example = ? ', (x, ))
-            example_id = self.cursor.fetchone()[0]
-
-            self.cursor.execute('SELECT traduccion FROM Ejemplos WHERE example_id = ? ', (example_id, ))
-            ejemplos = [ str(n[0]) for n in self.cursor.fetchall() ][0]
-
-            sentences[x] = ejemplos
-        
-        self.data['sentences'] = sentences
-
-    def AddWord(self):
-        self.cursor.execute('INSERT OR IGNORE INTO Words (word) VALUES ( ? )', ( self.word, ))
-        return self.Word_id()
-
-    def AddTranslation(self, word_id):
-        for i in self.data['translation']:
-            self.cursor.execute('INSERT OR IGNORE INTO Translation (word_id, traduccion) VALUES (?, ? )', (word_id, i))
-
-    def AddMeaning(self, word_id):
-        for i in self.data['meaning']:
-            self.cursor.execute('INSERT OR IGNORE INTO Meanings (word_id, meaning) VALUES (?, ?)', (word_id, i))
-
-    def AddExamples(self, word_id):
-        for i,j in self.data['sentences'].items():
-            self.cursor.execute('INSERT OR IGNORE INTO Examples (word_id, Example) VALUES (?, ?)', (word_id, i))
-            self.cursor.execute('SELECT id FROM Examples WHERE Example = ? ', (i, ))
-            example_id = self.cursor.fetchone()[0]
-            if type(j) == list:
-                for q in j:
-                    self.cursor.execute('INSERT OR IGNORE INTO Ejemplos (word_id, example_id, traduccion) VALUES (?, ?, ?)', (word_id, example_id, q))
-            else: 
-                self.cursor.execute('INSERT OR IGNORE INTO Ejemplos (word_id, example_id, traduccion) VALUES (?, ?, ?)', (word_id, example_id, j))
-
-    def Adding(self):
-        word_id = self.AddWord()
-        self.AddTranslation(word_id)
-        self.AddMeaning(word_id)
-        self.AddExamples(word_id)
-        self.connection.commit()
         self.cursor.close()
